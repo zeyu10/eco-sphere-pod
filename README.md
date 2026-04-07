@@ -1,8 +1,12 @@
 # EcoSphere Pod - SEA-CICSIC - 2026
 
-## GitHub Repository
+## GitHub Repository and Preliminary Technical Roadmap
 
 [https://github.com/zeyu10/eco-sphere-pod](https://github.com/zeyu10/eco-sphere-pod)
+
+[Demo Website Page](https://zeyu10.github.io/eco-sphere-pod)
+
+[Preliminary Technical Roadmap](TECHNICAL_ROADMAP.md)
 
 ## Introduction
 
