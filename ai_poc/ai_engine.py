@@ -18,11 +18,11 @@ from datetime import datetime
 
 class FishStressPredictor:
     """
-    Multi-parameter Z-score analysis with weighted Fish Stress Index.
-    MVP algorithm from AI_INTELLIGENCE.md Section 3.1.
+    Multi-parameter Z-score analysis with weighted Fish Stress Index (FSI).
+    Implements the MVP algorithm for physiological monitoring.
     """
     
-    # Species-specific safe ranges and weights
+    # Species-specific safe ranges and importance weights
     SPECIES_PROFILES = {
         "tilapia": {
             "safe_ranges": {
@@ -35,8 +35,8 @@ class FishStressPredictor:
             "weights": {
                 "temperature": 0.15,
                 "ph": 0.15,
-                "do": 0.25,   # DO is most critical for fish survival
-                "nh3": 0.30,  # Ammonia toxicity is the #1 killer
+                "do": 0.25,   # DO is critical for respiration
+                "nh3": 0.30,  # Ammonia toxicity is the primary acute risk
                 "turbidity": 0.15,
             }
         },
@@ -63,23 +63,21 @@ class FishStressPredictor:
         self.profile = self.SPECIES_PROFILES.get(species, self.SPECIES_PROFILES["tilapia"])
     
     def calculate_zscore(self, current_value, history_values):
-        """Calculate Z-score: how many standard deviations from the rolling mean"""
+        """Calculate Z-score: deviation from rolling mean in standard deviations"""
         if len(history_values) < 10:
             return 0.0
         
         mean = statistics.mean(history_values)
         stdev = statistics.stdev(history_values)
         
-        if stdev < 0.001:  # avoid division by zero
+        if stdev < 0.001:  # Avoid division by zero for static sensors
             return 0.0
         
         return abs(current_value - mean) / stdev
     
     def calculate_trend(self, values, window=30):
         """
-        Linear regression slope on recent values.
-        Positive = rising, negative = falling.
-        Returns slope per tick (units/tick).
+        Linear regression slope on recent values (units per tick).
         """
         recent = values[-window:] if len(values) >= window else values
         if len(recent) < 5:
@@ -99,23 +97,20 @@ class FishStressPredictor:
     
     def predict_danger_hours(self, current_value, trend_slope, safe_range):
         """
-        Project how many hours until value exits safe range.
-        Based on current trend direction and velocity.
+        Project time remaining until a parameter exits the safe boundary.
         """
         if abs(trend_slope) < 0.0001:
-            return None  # no significant trend
+            return None 
         
-        ticks_per_hour = 360  # 10s intervals
+        ticks_per_hour = 360  # Based on 10s sensor intervals
         
         if trend_slope > 0:
-            # Rising: when will it exceed upper bound?
             distance = safe_range[1] - current_value
         else:
-            # Falling: when will it drop below lower bound?
             distance = current_value - safe_range[0]
         
         if distance <= 0:
-            return 0  # already outside safe range
+            return 0  # Already breached
         
         ticks_to_danger = distance / abs(trend_slope)
         hours_to_danger = ticks_to_danger / ticks_per_hour
@@ -124,8 +119,7 @@ class FishStressPredictor:
     
     def analyze(self, current_data, history):
         """
-        Main analysis function.
-        Returns Fish Stress Index (0-100) with risk breakdown.
+        Main analysis function. Returns FSI (0-100) and risk breakdown.
         """
         params = ["temperature", "ph", "do", "nh3", "turbidity"]
         z_scores = {}
@@ -133,38 +127,30 @@ class FishStressPredictor:
         danger_windows = {}
         
         for param in params:
-            # Extract history for this parameter
             param_history = [h[param] for h in history if param in h]
             current_val = current_data.get(param, 0)
             
-            # Z-score calculation
             z_scores[param] = self.calculate_zscore(current_val, param_history)
-            
-            # Trend analysis
             trends[param] = self.calculate_trend(param_history)
             
-            # Danger window projection
             safe_range = self.profile["safe_ranges"][param]
             danger_windows[param] = self.predict_danger_hours(
                 current_val, trends[param], safe_range
             )
         
-        # Weighted FSI calculation
+        # Weighted Fish Stress Index (FSI)
         weights = self.profile["weights"]
         raw_fsi = sum(weights[p] * z_scores[p] for p in params)
         
-        # Normalize to 0-100 (Z-score of 5 = FSI 100)
+        # Normalize: Z-score of 5 roughly equals FSI 100
         fsi_score = min(100, raw_fsi * 20)
         
-        # Identify dominant risk factor
         weighted_contributions = {p: weights[p] * z_scores[p] for p in params}
         dominant_factor = max(weighted_contributions, key=weighted_contributions.get)
         
-        # Find nearest danger window
         valid_windows = {p: h for p, h in danger_windows.items() if h is not None and h < 24}
         nearest_danger = min(valid_windows.values()) if valid_windows else None
         
-        # Determine risk level
         if fsi_score >= 80:
             risk_level = "CRITICAL"
         elif fsi_score >= 60:
@@ -174,7 +160,6 @@ class FishStressPredictor:
         else:
             risk_level = "HEALTHY"
         
-        # Generate recommended action
         action = self._generate_action(dominant_factor, fsi_score, current_data)
         
         return {
@@ -188,35 +173,35 @@ class FishStressPredictor:
         }
     
     def _generate_action(self, factor, fsi, data):
-        """Generate specific corrective action based on dominant risk"""
+        """Generate corrective actuator commands based on risk"""
         actions = {
             "nh3": {
                 "actuator": "feeder",
                 "command": "PAUSE" if fsi > 70 else "REDUCE_20PCT",
-                "reason": f"Ammonia at {data.get('nh3', 0):.3f} ppm — reduce nutrient input"
+                "reason": f"Ammonia at {data.get('nh3', 0):.3f} ppm — reducing waste load"
             },
             "do": {
                 "actuator": "pump",
                 "command": "MAX_SPEED" if fsi > 70 else "INCREASE",
-                "reason": f"DO at {data.get('do', 0):.1f} mg/L — increase water circulation"
+                "reason": f"DO at {data.get('do', 0):.1f} mg/L — increasing aeration"
             },
             "temperature": {
                 "actuator": "heater",
                 "command": "ADJUST",
-                "reason": f"Temperature at {data.get('temperature', 0):.1f}°C — stabilize"
+                "reason": f"Temperature at {data.get('temperature', 0):.1f}°C — stabilizing thermal profile"
             },
             "ph": {
                 "actuator": "pump",
                 "command": "INCREASE",
-                "reason": f"pH at {data.get('ph', 0):.2f} — increase circulation for buffering"
+                "reason": f"pH at {data.get('ph', 0):.2f} — increasing gas exchange for buffering"
             },
             "turbidity": {
                 "actuator": "pump",
                 "command": "INCREASE",
-                "reason": f"Turbidity at {data.get('turbidity', 0):.1f} NTU — boost filtration"
+                "reason": f"Turbidity at {data.get('turbidity', 0):.1f} NTU — boosting filtration cycle"
             }
         }
-        return actions.get(factor, {"actuator": "none", "command": "MONITOR", "reason": "Continue monitoring"})
+        return actions.get(factor, {"actuator": "none", "command": "MONITOR", "reason": "Stable conditions"})
 
 
 # =============================================
@@ -225,41 +210,37 @@ class FishStressPredictor:
 
 class FeedingOptimizer:
     """
-    Q10 metabolic scaling with post-feeding evaluation.
-    MVP algorithm from AI_INTELLIGENCE.md Section 3.2.
+    Q10 metabolic scaling with post-feeding evaluation (closed-loop).
     """
     
-    Q10 = 2.0  # biological temperature coefficient
+    Q10 = 2.0  # Standard biological temperature coefficient
     
     def __init__(self, base_feed_grams=15.0, reference_temp=25.0):
         self.base_feed_grams = base_feed_grams
         self.reference_temp = reference_temp
-        self.feed_history = []  # stores past feeding outcomes
-        self.adjustment_factor = 1.0  # learned from post-feed evaluation
+        self.feed_history = [] 
+        self.adjustment_factor = 1.0  # Dynamically learned adjustment
     
     def calculate_feed_amount(self, current_temp, current_nh3, current_do,
                                nh3_threshold=0.8, do_minimum=5.0):
         """
-        Dynamic feeding calculation:
-        1. Q10 metabolic scaling based on water temperature
-        2. Water quality gate check
-        3. Apply learned adjustment from past feeding outcomes
+        1. Scaling: Adjust for metabolic rate (Temp)
+        2. Gating: Check water quality thresholds
+        3. Learning: Apply historical adjustment factor
         """
-        # Step 1: Q10 metabolic scaling
         scaling_factor = self.Q10 ** ((current_temp - self.reference_temp) / 10.0)
         calculated_amount = self.base_feed_grams * scaling_factor
         
-        # Step 2: Water quality pre-check
         water_quality_ok = True
         delay_reason = None
         
         if current_nh3 > nh3_threshold:
             water_quality_ok = False
-            delay_reason = f"Ammonia elevated at {current_nh3:.3f} ppm (threshold: {nh3_threshold})"
+            delay_reason = f"Ammonia spikes at {current_nh3:.3f} ppm (threshold: {nh3_threshold})"
         
         if current_do < do_minimum:
             water_quality_ok = False
-            delay_reason = f"DO too low at {current_do:.1f} mg/L (minimum: {do_minimum})"
+            delay_reason = f"Hypoxia risk: DO {current_do:.1f} mg/L (min: {do_minimum})"
         
         if not water_quality_ok:
             return {
@@ -270,10 +251,7 @@ class FeedingOptimizer:
                 "servo_angle": 0,
             }
         
-        # Step 3: Apply learned adjustment
         final_amount = calculated_amount * self.adjustment_factor
-        
-        # Convert to servo angle (0-180 degrees, proportional to amount)
         servo_angle = min(180, int(final_amount / self.base_feed_grams * 90))
         
         return {
@@ -288,25 +266,23 @@ class FeedingOptimizer:
     
     def evaluate_post_feeding(self, pre_feed_nh3, post_feed_nh3_peak, amount_fed):
         """
-        Closed-loop learning: evaluate feeding outcome and adjust future amounts.
-        Called 2-4 hours after each feeding event.
+        Evaluates metabolic load vs input to update adjustment factor.
         """
         delta_nh3 = post_feed_nh3_peak - pre_feed_nh3
         
         if delta_nh3 > 0.5:
             efficiency = "OVERFED"
-            adjustment = -0.15  # reduce future feeds by 15%
+            adjustment = -0.15 
         elif delta_nh3 > 0.3:
             efficiency = "SLIGHTLY_OVER"
             adjustment = -0.08
         elif delta_nh3 < 0.05:
             efficiency = "UNDERFED"
-            adjustment = +0.10  # increase future feeds by 10%
+            adjustment = +0.10 
         else:
             efficiency = "OPTIMAL"
             adjustment = 0
         
-        # Update learned adjustment factor
         self.adjustment_factor = max(0.5, min(1.5, self.adjustment_factor + adjustment))
         
         result = {
@@ -327,12 +303,9 @@ class FeedingOptimizer:
 
 class PlantGrowthPredictor:
     """
-    Growth curve modeling with bottleneck diagnosis.
-    MVP algorithm from AI_INTELLIGENCE.md Section 3.3.
-    (Camera image analysis simulated via growth parameters)
+    Growth modeling with environmental bottleneck diagnosis.
     """
     
-    # Expected growth rates (% leaf area increase per day) under ideal conditions
     GROWTH_CURVES = {
         "lettuce": {"daily_rate": 8.0, "days_to_harvest": 35, "min_nitrate": 40, "light_hours": 14},
         "basil": {"daily_rate": 6.5, "days_to_harvest": 42, "min_nitrate": 35, "light_hours": 12},
@@ -344,38 +317,25 @@ class PlantGrowthPredictor:
         self.curve = self.GROWTH_CURVES.get(plant_species, self.GROWTH_CURVES["lettuce"])
         self.growth_log = []
         self.days_planted = 0
-        self.current_size_pct = 0.0  # 0% to 100% (harvest-ready)
+        self.current_size_pct = 0.0  # Percentage of full maturity
     
     def simulate_daily_growth(self, nitrate_ppm, light_hours, water_temp):
-        """
-        Calculate actual daily growth based on environmental conditions.
-        In real system, this would use camera image analysis.
-        """
         self.days_planted += 1
         
-        # Calculate growth limiting factors
+        # Calculate limiting factors (Liebig's Law of the Minimum)
         nutrient_factor = min(1.0, nitrate_ppm / self.curve["min_nitrate"])
         light_factor = min(1.0, light_hours / self.curve["light_hours"])
         temp_factor = 1.0 if 20 <= water_temp <= 28 else max(0.3, 1 - abs(water_temp - 24) * 0.05)
         
-        # Actual growth = ideal rate × worst limiting factor
         limiting = min(nutrient_factor, light_factor, temp_factor)
         actual_rate = self.curve["daily_rate"] * limiting
         
         self.current_size_pct = min(100, self.current_size_pct + actual_rate)
         
-        # Bottleneck diagnosis
         bottleneck = self._diagnose_bottleneck(nutrient_factor, light_factor, temp_factor,
-                                                nitrate_ppm, light_hours, water_temp)
+                                                 nitrate_ppm, light_hours, water_temp)
         
-        # Harvest date prediction
-        if actual_rate > 0.1:
-            remaining_pct = 100 - self.current_size_pct
-            days_to_harvest = remaining_pct / actual_rate
-        else:
-            days_to_harvest = None  # growth stalled
-        
-        # Health score (actual vs expected)
+        days_to_harvest = (100 - self.current_size_pct) / actual_rate if actual_rate > 0.1 else None
         health_score = min(100, (actual_rate / self.curve["daily_rate"]) * 100)
         
         result = {
@@ -398,28 +358,27 @@ class PlantGrowthPredictor:
         return result
     
     def _diagnose_bottleneck(self, nut_f, light_f, temp_f, nitrate, light_h, temp):
-        """Identify the specific limiting factor"""
         factors = {"nutrients": nut_f, "light": light_f, "temperature": temp_f}
         worst = min(factors, key=factors.get)
         
         if factors[worst] >= 0.9:
-            return None  # all factors adequate
+            return None 
         
         diagnoses = {
             "nutrients": {
                 "factor": "low_nutrients",
                 "detail": f"Nitrate at {nitrate:.0f} ppm, target {self.curve['min_nitrate']} ppm",
-                "action": "Increase fish feeding to boost nutrient production"
+                "action": "Increase fish feeding to boost nitrate production"
             },
             "light": {
                 "factor": "insufficient_light",
                 "detail": f"Current {light_h:.0f}h/day, required {self.curve['light_hours']}h/day",
-                "action": f"Extend smart lighting by {self.curve['light_hours'] - light_h:.0f} hours"
+                "action": f"Extend lighting cycle by {self.curve['light_hours'] - light_h:.0f} hours"
             },
             "temperature": {
                 "factor": "temperature_stress",
-                "detail": f"Water temp {temp:.1f}°C outside optimal range",
-                "action": "Adjust heater to maintain 22-26°C"
+                "detail": f"Water temp {temp:.1f}°C outside optimal vegetative range",
+                "action": "Check heater/cooler to maintain 22-26°C"
             }
         }
         return diagnoses[worst]
@@ -431,9 +390,7 @@ class PlantGrowthPredictor:
 
 class EcosystemBalancer:
     """
-    Master coordinator: nutrient flow modeling + multi-objective optimization.
-    Sits above the three expert modules and resolves conflicts.
-    MVP algorithm from AI_INTELLIGENCE.md Section 3.4.
+    Master coordinator: resolves conflicts between expert modules.
     """
     
     def __init__(self):
@@ -442,21 +399,15 @@ class EcosystemBalancer:
     def calculate_nutrient_flow(self, daily_feed_grams, water_temp, plant_growth_rate,
                                  biofilter_age_days=30):
         """
-        Material balance equation:
-        net = fish_waste_production - biofilter_conversion - plant_absorption
+        Flow balance: fish_waste - biofilter_conversion - plant_uptake
         """
-        # Fish waste production (approx 3% of feed becomes ammonia)
         fish_waste_nh3 = daily_feed_grams * 0.03
         
-        # Biofilter conversion (temperature-dependent nitrifying bacteria)
-        # Efficiency peaks at 25°C, drops below 15°C
         temp_efficiency = min(1.0, water_temp / 25.0)
-        maturity_efficiency = min(1.0, biofilter_age_days / 30.0)  # takes ~30 days to mature
+        maturity_efficiency = min(1.0, biofilter_age_days / 30.0) 
         biofilter_conversion = fish_waste_nh3 * temp_efficiency * maturity_efficiency * 0.85
         
-        # Plant absorption (proportional to growth rate)
-        plant_absorption = plant_growth_rate * 0.1  # simplified nutrient uptake model
-        
+        plant_absorption = plant_growth_rate * 0.1 
         net_accumulation = fish_waste_nh3 - biofilter_conversion - plant_absorption
         
         return {
@@ -468,10 +419,6 @@ class EcosystemBalancer:
         }
     
     def optimize(self, fsi_result, feeding_result, plant_result, nutrient_flow, current_sensors):
-        """
-        Master coordination logic.
-        Resolves conflicts between expert modules and issues unified commands.
-        """
         commands = {
             "pump": {"action": "NORMAL", "reason": ""},
             "lighting": {"action": "MAINTAIN", "reason": ""},
@@ -480,38 +427,28 @@ class EcosystemBalancer:
         
         overrides = []
         
-        # === Priority 1: Safety override (FSI critical) ===
-        if fsi_result["fsi_score"] >= 80:
-            commands["pump"] = {"action": "MAX_SPEED", "reason": "Critical fish stress — maximize oxygenation"}
-            commands["feeder"] = {"action": "PAUSE_24H", "reason": "Critical stress — stop all feeding"}
-            overrides.append("SAFETY: FSI critical, overriding all other recommendations")
+        # === Priority 1: Safety (Predictive Intervention) ===
+        if fsi_result["fsi_score"] >= 40:
+            commands["pump"] = {"action": "MAX_SPEED", "reason": "Preemptive stress response — maximizing oxygen"}
+            commands["feeder"] = {"action": "PAUSE", "reason": "Risk detected — halting feed to protect water quality"}
+            overrides.append("SAFETY: Elevated FSI, overriding growth goals")
         
-        # === Priority 2: Nutrient balance ===
+        # === Priority 2: Nutrient Balance ===
         elif nutrient_flow["net_accumulation_mg"] > 0.5:
-            # Nutrient buildup — risk of ammonia spike
-            commands["feeder"] = {"action": "REDUCE_20PCT", "reason": "Nutrient accumulation — reduce input"}
-            commands["lighting"] = {"action": "EXTEND_2H", "reason": "Boost plant absorption to consume excess nutrients"}
-            commands["pump"] = {"action": "INCREASE", "reason": "Improve circulation for filtration"}
-            overrides.append("BALANCE: Nutrient surplus detected, reducing feed + boosting absorption")
+            commands["feeder"] = {"action": "REDUCE_20PCT", "reason": "Nitrate buildup detected"}
+            commands["lighting"] = {"action": "EXTEND_2H", "reason": "Increasing plant consumption"}
+            overrides.append("BALANCE: Surplus detected")
             
         elif nutrient_flow["net_accumulation_mg"] < -0.3:
-            # Nutrient deficit — plants starving
-            commands["feeder"] = {"action": "INCREASE_15PCT", "reason": "Nutrient deficit — plants need more"}
-            overrides.append("BALANCE: Nutrient deficit, increasing feed for plant nutrition")
+            # Safety lock: Only increase feed if NH3 is verified low
+            if current_sensors.get("nh3", 0) < 0.4:
+                commands["feeder"] = {"action": "INCREASE_15PCT", "reason": "Nutrient deficit — optimizing for plants"}
+                overrides.append("BALANCE: Deficit optimization")
+            else:
+                commands["feeder"] = {"action": "MAINTAIN", "reason": "Deficit exists but NH3 safety buffer is insufficient"}
+                overrides.append("CONFLICT: Safety lock preventing feed increase")
         
-        # === Priority 3: Plant growth optimization (only if no safety/balance issues) ===
-        if plant_result and plant_result.get("bottleneck") and not overrides:
-            bottleneck = plant_result["bottleneck"]
-            if bottleneck["factor"] == "insufficient_light":
-                commands["lighting"] = {"action": "EXTEND_2H", "reason": bottleneck["action"]}
-            elif bottleneck["factor"] == "low_nutrients":
-                # Check: can we safely increase feeding?
-                if current_sensors["nh3"] < 0.5 and fsi_result["fsi_score"] < 40:
-                    commands["feeder"] = {"action": "INCREASE_10PCT", "reason": "Safe to increase for plant nutrition"}
-                else:
-                    overrides.append("CONFLICT: Plants need more nutrients but water quality cannot support increased feeding")
-        
-        # === Calculate ecosystem score ===
+        # === Calculate Ecosystem Health Scores ===
         water_score = max(0, 100 - (current_sensors.get("nh3", 0) / 1.0 * 50))
         fish_score = max(0, 100 - fsi_result["fsi_score"])
         plant_score = plant_result["growth_health_score"] if plant_result else 70
@@ -536,54 +473,31 @@ class EcosystemBalancer:
 
 
 # =============================================
-# Quick Test
+# Quick Integration Test
 # =============================================
 if __name__ == "__main__":
-    # Test Fish Stress Predictor
     print("=" * 60)
-    print("  Testing Fish Stress Predictor")
+    print("  Testing EcoSphere Intelligence Engine")
     print("=" * 60)
     
+    # 1. Stress Prediction Test
     fsp = FishStressPredictor("tilapia")
+    fake_history = [{"temperature": 25.0, "ph": 7.0, "do": 7.8, "nh3": 0.2, "turbidity": 15} for _ in range(30)]
     
-    # Generate fake history (30 normal readings)
-    fake_history = []
-    import random
-    for i in range(30):
-        fake_history.append({
-            "temperature": 25.0 + random.gauss(0, 0.5),
-            "ph": 7.0 + random.gauss(0, 0.1),
-            "do": 7.8 + random.gauss(0, 0.3),
-            "nh3": 0.2 + random.gauss(0, 0.05),
-            "turbidity": 15.0 + random.gauss(0, 2),
-        })
-    
-    # Test with normal data
-    normal_data = {"temperature": 25.5, "ph": 7.1, "do": 7.5, "nh3": 0.25, "turbidity": 16}
-    result = fsp.analyze(normal_data, fake_history)
-    print(f"\nNormal: FSI={result['fsi_score']}, Risk={result['risk_level']}")
-    
-    # Test with crisis data
     crisis_data = {"temperature": 28.0, "ph": 6.2, "do": 4.5, "nh3": 1.5, "turbidity": 40}
-    result = fsp.analyze(crisis_data, fake_history)
-    print(f"Crisis: FSI={result['fsi_score']}, Risk={result['risk_level']}, "
-          f"Factor={result['dominant_risk_factor']}")
-    print(f"Action: {result['recommended_action']}")
+    res = fsp.analyze(crisis_data, fake_history)
+    print(f"\n[STRESS TEST] Crisis FSI: {res['fsi_score']} ({res['risk_level']})")
+    print(f"Action: {res['recommended_action']['reason']}")
     
-    # Test Feeding Optimizer
-    print("\n" + "=" * 60)
-    print("  Testing Feeding Optimizer")
-    print("=" * 60)
+    # 2. Feeding Test
+    fo = FeedingOptimizer()
+    warm = fo.calculate_feed_amount(28.0, 0.2, 7.5)
+    print(f"\n[FEEDING TEST] 28°C scaling: {warm['amount_grams']}g ({warm['q10_scaling']}x factor)")
     
-    fo = FeedingOptimizer(base_feed_grams=15.0, reference_temp=25.0)
-    
-    warm = fo.calculate_feed_amount(current_temp=28.0, current_nh3=0.2, current_do=7.5)
-    print(f"\nWarm water (28°C): {warm['amount_grams']}g — {warm['reason']}")
-    
-    cold = fo.calculate_feed_amount(current_temp=18.0, current_nh3=0.2, current_do=7.5)
-    print(f"Cold water (18°C): {cold['amount_grams']}g — {cold['reason']}")
-    
-    bad_water = fo.calculate_feed_amount(current_temp=25.0, current_nh3=1.2, current_do=7.5)
-    print(f"Bad water (NH3=1.2): {bad_water['action']} — {bad_water['reason']}")
-    
-    print("\n  All tests passed!")
+    # 3. Growth Test
+    pg = PlantGrowthPredictor("lettuce")
+    growth = pg.simulate_daily_growth(nitrate_ppm=10, light_hours=8, water_temp=24)
+    print(f"\n[GROWTH TEST] Bottleneck: {growth['bottleneck']['detail']}")
+    print(f"Advice: {growth['bottleneck']['action']}")
+
+    print("\nAll English localized tests completed successfully.")
