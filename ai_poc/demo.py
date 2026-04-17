@@ -79,6 +79,24 @@ def print_action(commands):
             color = RED if "PAUSE" in cmd["action"] or "MAX" in cmd["action"] else YELLOW
             print(f"  {color}→ {actuator.upper()}: {cmd['action']}{RESET} — {cmd['reason']}")
 
+def print_ecosystem_summary(eco_result):
+    
+    scores = eco_result["ecosystem_score"]
+    status_color = color_by_risk(eco_result["status"])
+    
+    print(f"\n  {BOLD}Ecosystem Balance Summary:{RESET}")
+    print(f"  {status_color}Overall Score: {scores['overall']:.1f}/100 [{eco_result['status']}]{RESET}")
+    print(f"  {DIM}├─ Water: {scores['water_quality']:.1f} | Fish: {scores['fish_health']:.1f} | Plant: {scores['plant_health']:.1f}{RESET}")
+    
+    nf = eco_result["nutrient_flow"]
+    direction = "↑ accumulating" if nf["net_accumulation_mg"] > 0 else "↓ deficit" if nf["net_accumulation_mg"] < 0 else "= balanced"
+    
+    print(f"  {CYAN}└─ Nutrient Flow: {nf['net_accumulation_mg']:+.3f} mg/day ({direction}){RESET}")
+    
+    if eco_result["overrides"]:
+        for override in eco_result["overrides"]:
+            print(f"  {YELLOW}⚡ {override}{RESET}")
+
 # =============================================
 # Main Demo Flow
 # =============================================
