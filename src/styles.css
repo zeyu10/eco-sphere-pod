@@ -15,6 +15,14 @@ body {
   font-family: var(--font-body);
 }
 
+body:has(.theme-light) {
+  background-color: #f7fcff;
+}
+
+body:has(.theme-dark) {
+  background-color: #111822;
+}
+
 .app {
   min-height: 100vh;
   position: relative;
@@ -202,7 +210,7 @@ h1 {
   margin-bottom: 6px;
 }
 
-.panel > p {
+.panel>p {
   color: var(--muted);
 }
 
@@ -373,6 +381,7 @@ h1 {
     opacity: 0;
     transform: translateY(6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -380,10 +389,12 @@ h1 {
 }
 
 @keyframes drift {
+
   0%,
   100% {
     transform: translateY(0) translateX(0);
   }
+
   50% {
     transform: translateY(16px) translateX(-12px);
   }
@@ -397,10 +408,24 @@ h1 {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+    padding: 14px;
+  }
+
+  .brand-group {
+    flex-direction: column;
+    gap: 8px;
   }
 
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .cards-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cards-container .card-value {
+    font-size: 1.4rem;
   }
 
   .hero-metrics,
@@ -441,9 +466,14 @@ h1 {
 .mermaid-diagram {
   margin-top: 20px;
   padding: 16px;
-  background: rgba(0,0,0,0.05);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: var(--radius-md);
   overflow-x: auto;
+  transition: background 0.35s ease;
+}
+
+.theme-dark .mermaid-diagram {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .mermaid {
@@ -489,18 +519,17 @@ h1 {
 }
 
 .insight-card.assessment {
-  border-left: 4px solid #4caf50; /* Green for good assessment */
+  border-left: 4px solid #4caf50;
 }
 
 .insight-card.suggestion {
-  border-left: 4px solid #ffc107; /* Amber for suggestion */
+  border-left: 4px solid #ffc107;
 }
 
 .insight-card.automation {
-  border-left: 4px solid #2196f3; /* Blue for automation info */
+  border-left: 4px solid #2196f3;
 }
 
-/* Profile Tab Styles */
 .profile-grid {
   margin-top: 20px;
   display: grid;
@@ -585,12 +614,12 @@ h1 {
   justify-content: space-between;
   align-items: center;
   padding: 10px;
-  background: rgba(0,0,0,0.05);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 8px;
 }
 
 .theme-dark .device-item {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .device-item p {

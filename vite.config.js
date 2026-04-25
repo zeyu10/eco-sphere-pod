@@ -1,5 +1,16 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/eco-sphere-pod/"
+  base: "/eco-sphere-pod/",
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            return "vendor";
+          }
+        }
+      }
+    }
+  }
 });

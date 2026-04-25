@@ -1,5 +1,33 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import mermaid from "mermaid";
+
+function MermaidDiagram({ chart, id, theme }) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !chart) return;
+    let cancelled = false;
+    const mermaidTheme = theme === 'dark' ? 'dark' : 'neutral';
+    const diagramId = `mermaid-diagram-${id}-${theme}`;
+
+    mermaid.initialize({ startOnLoad: false, theme: mermaidTheme });
+
+    mermaid.render(diagramId, chart.trim()).then(({ svg }) => {
+      if (!cancelled && containerRef.current) {
+        containerRef.current.innerHTML = svg;
+      }
+    }).catch((err) => {
+      console.error('Mermaid render error:', err);
+      if (!cancelled && containerRef.current) {
+        containerRef.current.innerHTML = `<pre style="color:red;">Mermaid render failed: ${err.message}</pre>`;
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [chart, id, theme]);
+
+  return <div ref={containerRef} className="mermaid-diagram" />;
+}
 
 const tabs = ["Home", "Dashboard", "Roadmap", "Profile"];
 
@@ -166,12 +194,6 @@ function App() {
   const [activeTab, setActiveTab] = useState("Home");
   const [theme, setTheme] = useState("light");
 
-  useEffect(() => {
-    if (activeTab === "Roadmap") {
-      mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
-      mermaid.contentLoaded();
-    }
-  }, [activeTab]);
 
   const themeLabel = useMemo(
     () => (theme === "light" ? "Switch to Dark" : "Switch to Light"),
@@ -219,7 +241,7 @@ function App() {
           <section className="panel fade-in">
             <h2>Home</h2>
             <p>
-                Welcome to the Future of Sustainable Living.
+              Welcome to the Future of Sustainable Living.
             </p>
             <div className="home-grid">
               <article className="home-tile glass">
@@ -337,9 +359,7 @@ function App() {
                   </div>
                   <p>{item.detail}</p>
                   {item.mermaid && (
-                    <div className="mermaid-diagram">
-                      <div className="mermaid">{item.mermaid}</div>
-                    </div>
+                    <MermaidDiagram chart={item.mermaid} id={index} theme={theme} />
                   )}
                 </div>
               ))}
@@ -396,7 +416,7 @@ function App() {
                     <span>Online</span>
                   </div>
                   <div className="device-item">
-                    <p>Bedroom Pod (Offline) 🔌</p>
+                    <p>Bedroom Pod 🔌</p>
                     <span>Offline</span>
                   </div>
                   <button className="profile-button">Manage Devices</button>
