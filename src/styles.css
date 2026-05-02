@@ -172,8 +172,109 @@ h1 {
   border-radius: var(--radius-md);
   padding: 8px;
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tab-section {
+  display: flex;
   gap: 8px;
+}
+
+.tab-left {
+  flex: 0 0 auto;
+}
+
+.tab-right {
+  flex: 0 0 auto;
+}
+
+.tab-divider {
+  flex: 1;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.divider-content {
+  color: var(--muted);
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 1px rgba(72, 192, 255, 0.3));
+}
+
+.divider-line {
+  color: var(--muted);
+  opacity: 0.5;
+  margin: 0 8px;
+}
+
+@media (max-width: 768px) {
+  .tabs {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0;
+  }
+
+  .tab-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .tab-divider-center {
+    display: none;
+  }
+
+  .tab-divider {
+    width: auto;
+    height: auto;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 12px;
+    margin-left: 20px;
+  }
+
+  .divider-content {
+    background: transparent;
+    -webkit-text-fill-color: unset;
+    color: var(--muted);
+    padding: 0;
+    filter: none;
+  }
+
+  .divider-line {
+    display: none;
+  }
+
+  .tab-btn {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 769px) {
+  .tab-divider {
+    display: none !important;
+  }
+
+  .tab-divider-center {
+    display: flex;
+  }
 }
 
 .tab-btn {
@@ -184,6 +285,8 @@ h1 {
   padding: 9px 16px;
   cursor: pointer;
   transition: background 0.25s ease, transform 0.25s ease;
+  min-width: 105px;
+  text-align: center;
 }
 
 .tab-btn:hover {

@@ -29,7 +29,7 @@ function MermaidDiagram({ chart, id, theme }) {
   return <div ref={containerRef} className="mermaid-diagram" />;
 }
 
-const tabs = ["Home", "Dashboard", "Roadmap", "Profile"];
+const tabs = ["Home", "Roadmap", "Dashboard", "Profile"];
 
 const statCards = [
   { label: "Active Pods", value: "12", change: "+3 this month", icon: "🌿" },
@@ -225,15 +225,31 @@ function App() {
       </header>
 
       <nav className="tabs glass" aria-label="Main tabs">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            className={`tab-btn ${activeTab === tab ? "active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
+        <div className="tab-section tab-left">
+          {tabs.slice(0, 2).map((tab) => (
+            <button
+              key={tab}
+              className={`tab-btn ${activeTab === tab ? "active" : ""}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+          <div className="tab-divider divider-public"><span className="divider-content">✦ Public</span></div>
+        </div>
+        <div className="tab-divider-center"><span className="divider-content">✦ Public</span> <span className="divider-line">|</span> <span className="divider-content">Private ✦</span></div>
+        <div className="tab-section tab-right">
+          {tabs.slice(2).map((tab) => (
+            <button
+              key={tab}
+              className={`tab-btn ${activeTab === tab ? "active" : ""}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+          <div className="tab-divider divider-private"><span className="divider-content">✦ Private</span></div>
+        </div>
       </nav>
 
       <main className="content">
